@@ -1,4 +1,4 @@
-package go_watermark
+package gowatermark
 
 import "os"
 

@@ -1,29 +1,31 @@
 # go-watermark
 
-## Install
+使用 Go 语言开发图片水印工具，可以添加图片和文字水印。
+
+## 安装
 
 ```
-go get -u github.com/xing-zr/go-watermark
+go get -u github.com/xing-zr/gowatermark
 ```
 
-## Usage
+## 示例
 
-### Image Watermark
+### 添加图片水印
 
 ```go
-config := ImageWatermarkConfig{
+config := gowatermark.ImageWatermarkConfig{
     OriginImagePath:    "./testdata/origin.jpg",
     WatermarkImagePath: "./testdata/watermark.png",
     WatermarkPos:       LeftTop,
     CompositeImagePath: "./testdata/composite.jpg",
 }
-CreateImageWatermark(config)
+gowatermark.CreateImageWatermark(config)
 ```
 
-### Text Watermark
+### 添加文字水印
 
 ```go
-config := TextWatermarkConfig{
+config := gowatermark.TextWatermarkConfig{
     OriginImagePath:    "./testdata/origin.jpg",
     CompositeImagePath: "./testdata/composite.jpg",
     FontPath:           "./testdata/font.ttf",
@@ -36,5 +38,5 @@ config := TextWatermarkConfig{
         },
     },
 }
-CreateTextWatermark(config)
+gowatermark.CreateTextWatermark(config)
 ```

@@ -1,4 +1,4 @@
-package go_watermark
+package gowatermark
 
 import (
 	"errors"
@@ -20,6 +20,9 @@ type ImageWatermarkConfig struct {
 	WatermarkImagePath string       // 水印图地址
 	WatermarkPos       watermarkPos // 水印位置
 	CompositeImagePath string       // 合成图地址
+	OffsetX            int          // 水印位置偏移量X
+	OffsetY            int          // 水印位置偏移量Y
+	Opacity            float64      // 水印透明度
 	TiledRows          int          // 水印图横向平铺行数
 	TiledCols          int          // 水印图横向平铺列数
 }
@@ -63,6 +66,13 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 			return err
 		}
 	}
+	// 水印透明度判断
+	if config.Opacity < 0 || config.Opacity > 1 {
+		return errors.New("watermark opacity error:Ensure 0.0 <= opacity <= 1.0")
+	}
+	if config.Opacity == 0 {
+		config.Opacity = 1
+	}
 	// 获取原图大小
 	originImg, _ := imaging.Decode(originFile)
 	watermarkImg, _ := imaging.Decode(watermarkFile)
@@ -76,13 +86,13 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 	var destImg image.Image
 	switch config.WatermarkPos {
 	case LeftTop:
-		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(10, 10), 1)
+		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(config.OffsetX, config.OffsetY), config.Opacity)
 	case RightTop:
-		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(originImgWidth-int(targetWatermarkImgWidth)-10, 10), 1)
+		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(originImgWidth-int(targetWatermarkImgWidth)-config.OffsetX, config.OffsetY), config.Opacity)
 	case LeftBottom:
-		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(10, originImgHeight-destwatermarkImg.Bounds().Dy()-10), 1)
+		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(config.OffsetX, originImgHeight-destwatermarkImg.Bounds().Dy()-config.OffsetY), config.Opacity)
 	case RightBottom:
-		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(originImgWidth-int(targetWatermarkImgWidth)-10, originImgHeight-destwatermarkImg.Bounds().Dy()-10), 1)
+		destImg = imaging.Overlay(originImg, destwatermarkImg, image.Pt(originImgWidth-int(targetWatermarkImgWidth)-config.OffsetX, originImgHeight-destwatermarkImg.Bounds().Dy()-config.OffsetY), config.Opacity)
 	case Tiled:
 		if config.TiledCols == 0 || config.TiledRows == 0 {
 			return errors.New("watermark position tiled need tiled_cols and tiled_rows")

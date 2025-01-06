@@ -1,4 +1,4 @@
-module github.com/xing-zr/go-watermark
+module github.com/xing-zr/gowatermark
 
 require (
 	github.com/disintegration/imaging v1.6.2
