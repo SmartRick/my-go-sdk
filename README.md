@@ -1,4 +1,4 @@
-# go-watermark
+# gowatermark
 
 使用 Go 语言开发图片水印工具，可以添加图片和文字水印。
 
