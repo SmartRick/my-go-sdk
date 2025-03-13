@@ -5,11 +5,13 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
 
 	"github.com/disintegration/imaging"
+	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -18,7 +20,7 @@ import (
 type ImageWatermarkConfig struct {
 	OriginImagePath    string       // 原图地址
 	WatermarkImagePath string       // 水印图地址
-	WatermarkPos       WatermarkPos // 水印位置
+	WatermarkPos       watermarkPos // 水印位置
 	CompositeImagePath string       // 合成图地址
 	OffsetX            int          // 水印位置偏移量X
 	OffsetY            int          // 水印位置偏移量Y
@@ -27,14 +29,14 @@ type ImageWatermarkConfig struct {
 	TiledCols          int          // 水印图横向平铺列数
 }
 
-type WatermarkPos string
+type watermarkPos string
 
 const (
-	LeftTop     WatermarkPos = "left_top"
-	RightTop    WatermarkPos = "right_top"
-	LeftBottom  WatermarkPos = "left_bottom"
-	RightBottom WatermarkPos = "right_bottom"
-	Tiled       WatermarkPos = "tiled"
+	LeftTop     watermarkPos = "left_top"
+	RightTop    watermarkPos = "right_top"
+	LeftBottom  watermarkPos = "left_bottom"
+	RightBottom watermarkPos = "right_bottom"
+	Tiled       watermarkPos = "tiled"
 )
 
 func CreateImageWatermark(config ImageWatermarkConfig) error {
@@ -49,23 +51,12 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 		return errors.New("open origin image file error:" + err.Error())
 	}
 	defer originFile.Close()
-	// 如果合成图片存在则删除重新生成
-	isExists, _ := pathExists(config.CompositeImagePath)
-	if isExists {
-		err = os.Remove(config.CompositeImagePath)
-		if err != nil {
-			return errors.New("old composite image remove error:" + err.Error())
-		}
+
+	// 准备输出路径
+	if err := PrepareOutputPath(config.CompositeImagePath); err != nil {
+		return errors.New("prepare output path error:" + err.Error())
 	}
-	// 判断文件夹是否存在，不存在创建
-	dirPath := filepath.Dir(config.CompositeImagePath)
-	isExist, _ := pathExists(dirPath)
-	if !isExist {
-		err = os.MkdirAll(dirPath, 0755)
-		if err != nil {
-			return err
-		}
-	}
+
 	// 水印透明度判断
 	if config.Opacity < 0 || config.Opacity > 1 {
 		return errors.New("watermark opacity error:Ensure 0.0 <= opacity <= 1.0")
@@ -134,6 +125,90 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 	return nil
 }
 
+type TextWatermarkConfig struct {
+	OriginImagePath    string // 原图地址
+	CompositeImagePath string // 合成图地址
+	FontPath           string // 字体文件地址
+	TextInfos          []TextInfo
+}
+
+type TextInfo struct {
+	Text  string     // 文字内容
+	Size  float64    // 文字大小
+	Color color.RGBA // 文字颜色透明度
+	X     int        // 位置信息
+	Y     int        // 位置信息
+}
+
+func CreateTextWatermark(config TextWatermarkConfig) error {
+	originFile, err := os.Open(config.OriginImagePath)
+	if err != nil {
+		return errors.New("open origin image file error:" + err.Error())
+	}
+	defer originFile.Close()
+	// 如果合成图片存在则删除重新生成
+	isExists, _ := pathExists(config.CompositeImagePath)
+	if isExists {
+		err = os.Remove(config.CompositeImagePath)
+		if err != nil {
+			return errors.New("old composite image remove error:" + err.Error())
+		}
+	}
+	// 判断文件夹是否存在，不存在创建
+	dirPath := filepath.Dir(config.CompositeImagePath)
+	isExist, _ := pathExists(dirPath)
+	if !isExist {
+		err = os.MkdirAll(dirPath, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	img, err := imaging.Decode(originFile)
+	if err != nil {
+		return err
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
+	draw.Draw(dst, dst.Bounds(), img, img.Bounds().Min, draw.Over)
+	// load font file
+	fontBytes, err := ioutil.ReadFile(config.FontPath)
+	if err != nil {
+		return err
+	}
+	font, err := freetype.ParseFont(fontBytes)
+	if err != nil {
+		return err
+	}
+	for _, v := range config.TextInfos {
+		f := freetype.NewContext()
+		f.SetDPI(72)
+		f.SetFont(font)       // 加载字体
+		f.SetFontSize(v.Size) // 设置字体尺寸
+		f.SetClip(dst.Bounds())
+		f.SetDst(dst)
+		f.SetSrc(image.NewUniform(v.Color)) // 设置字体颜色
+		// 位置信息
+		pt := freetype.Pt(v.X, v.Y)
+		_, err = f.DrawString(v.Text, pt)
+		if err != nil {
+			return err
+		}
+	}
+	if err = imaging.Save(dst, config.CompositeImagePath); err != nil {
+		return errors.New("create composite image error:" + err.Error())
+	}
+	return nil
+}
+
+type TextTiledWatermarkConfig struct {
+	OriginImagePath    string     // 原图地址
+	CompositeImagePath string     // 合成图地址
+	FontPath           string     // 字体文件地址
+	Text               string     // 文字内容
+	Color              color.RGBA // 文字颜色透明度
+	TiledRows          int        // 水印图横向平铺行数
+	TiledCols          int        // 水印图横向平铺列数
+}
+
 // TransparentTextWatermarkConfig 透明文字水印配置
 type TransparentTextWatermarkConfig struct {
 	OriginImagePath    string       // 原图地址
@@ -142,7 +217,7 @@ type TransparentTextWatermarkConfig struct {
 	Text               string       // 文字内容
 	Size               float64      // 文字大小
 	Color              color.RGBA   // 文字颜色
-	WatermarkPos       WatermarkPos // 水印位置
+	WatermarkPos       watermarkPos // 水印位置
 	Opacity            float64      // 水印透明度
 	OffsetX            int          // 水印位置偏移量X
 	OffsetY            int          // 水印位置偏移量Y
@@ -159,6 +234,121 @@ var (
 	Green = color.RGBA{0, 255, 0, 255}
 	Blue  = color.RGBA{0, 0, 255, 255}
 )
+
+func CreateTextTiledWatermark(config TextTiledWatermarkConfig) error {
+
+	if config.TiledCols == 0 || config.TiledRows == 0 {
+		return errors.New("watermark position tiled need tiled_cols and tiled_rows")
+	}
+	originFile, err := os.Open(config.OriginImagePath)
+	if err != nil {
+		return errors.New("open origin image file error:" + err.Error())
+	}
+	defer originFile.Close()
+	// 如果合成图片存在则删除重新生成
+	isExists, _ := pathExists(config.CompositeImagePath)
+	if isExists {
+		err = os.Remove(config.CompositeImagePath)
+		if err != nil {
+			return errors.New("old composite image remove error:" + err.Error())
+		}
+	}
+	// 判断文件夹是否存在，不存在创建
+	dirPath := filepath.Dir(config.CompositeImagePath)
+	isExist, _ := pathExists(dirPath)
+	if !isExist {
+		err = os.MkdirAll(dirPath, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	watermarkImg, err := textToImage(config)
+	if err != nil {
+		return err
+	}
+	originImg, _ := imaging.Decode(originFile)
+	originImgWidth := originImg.Bounds().Dx()
+	//originImgHeight := originImg.Bounds().Dy()
+	// 对水印图进行缩放(对比原图)
+	targetWatermarkImgWidth := uint(originImgWidth / 5)
+	destwatermarkImg := imaging.Resize(watermarkImg, int(targetWatermarkImgWidth), 0, imaging.Lanczos)
+
+	mainBounds := originImg.Bounds()
+	watermarkBounds := destwatermarkImg.Bounds()
+
+	// 创建一个与主图相同尺寸的新图像作为结果图像
+	result := image.NewNRGBA(mainBounds)
+	draw.Draw(result, mainBounds, originImg, image.Point{}, draw.Src)
+
+	// 计算水印在主图上平铺所需的行数和列数
+	rows := config.TiledRows
+	cols := config.TiledCols
+	// 计算行间距和列间距
+	totalWidth := cols * watermarkBounds.Dx()
+	totalHeight := rows * watermarkBounds.Dy()
+	extraWidth := mainBounds.Dx() - totalWidth
+	extraHeight := mainBounds.Dy() - totalHeight
+	rowSpacing := extraHeight / (rows + 1)
+	colSpacing := extraWidth / (cols + 1)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			// 计算当前水印在主图上的位置
+			x := c*(watermarkBounds.Dx()+colSpacing) + colSpacing/2
+			y := r*(watermarkBounds.Dy()+rowSpacing) + rowSpacing/2
+
+			// 将水印粘贴到结果图像的相应位置
+			draw.DrawMask(result, image.Rect(x, y, x+watermarkBounds.Dx(), y+watermarkBounds.Dy()), destwatermarkImg, destwatermarkImg.Bounds().Min, destwatermarkImg, destwatermarkImg.Bounds().Min, draw.Over)
+		}
+	}
+	if err = imaging.Save(result, config.CompositeImagePath); err != nil {
+		return errors.New("create composite image error:" + err.Error())
+	}
+	return nil
+}
+
+func textToImage(config TextTiledWatermarkConfig) (*image.NRGBA, error) {
+	// 加载字体文件
+	fontData, err := os.ReadFile(config.FontPath)
+	if err != nil {
+		return nil, errors.New("failed to read font file:" + err.Error())
+	}
+
+	fontFace, err := truetype.Parse(fontData)
+	if err != nil {
+		return nil, errors.New("failed to parse font:" + err.Error())
+	}
+
+	// 设置字体大小
+	var fontSize float64 = 50
+	face := truetype.NewFace(fontFace, &truetype.Options{
+		Size:    fontSize,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	// 计算文字的宽度和高度
+	textWidth, textHeight := measureText(face, config.Text)
+	// 创建一个新的图像
+	img := image.NewRGBA(image.Rect(0, 0, textWidth, textHeight))
+	// 绘制背景颜色透明
+	draw.Draw(img, img.Bounds(), image.Transparent, image.ZP, draw.Src)
+	// 设置文字颜色并添加透明度
+	//textColor := color.RGBA{R: 0, G: 0, B: 0, A: 200} // 黑色，半透明
+	textColor := config.Color
+	// 绘制文字
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(textColor),
+		Face: face,
+	}
+	// 设置绘制起点
+	d.Dot = fixed.P(0, textHeight-5)
+	// 绘制文字
+	d.DrawString(config.Text)
+	// 图片旋转
+	dst := imaging.Rotate(img, 45, color.Transparent)
+
+	return dst, nil
+}
 
 // measureText 计算给定文字的宽度和高度
 func measureText(face font.Face, text string) (int, int) {
@@ -203,22 +393,9 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error
 	}
 	defer originFile.Close()
 
-	// 处理输出路径
-	isExists, _ := pathExists(config.CompositeImagePath)
-	if isExists {
-		err = os.Remove(config.CompositeImagePath)
-		if err != nil {
-			return errors.New("old composite image remove error:" + err.Error())
-		}
-	}
-
-	dirPath := filepath.Dir(config.CompositeImagePath)
-	isExist, _ := pathExists(dirPath)
-	if !isExist {
-		err = os.MkdirAll(dirPath, 0755)
-		if err != nil {
-			return err
-		}
+	// 准备输出路径
+	if err := PrepareOutputPath(config.CompositeImagePath); err != nil {
+		return errors.New("prepare output path error:" + err.Error())
 	}
 
 	// 解码原始图片
@@ -228,9 +405,9 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error
 	}
 
 	// 创建文字水印图像
-	textWatermarkImg, err := createTextImage(config)
+	textWatermarkImg, err := CreateTextImage(config.Text, config.FontPath, config.Size, config.Color, config.Rotation)
 	if err != nil {
-		return err
+		return errors.New("create text image error: " + err.Error())
 	}
 
 	// 根据水印位置合成图片
@@ -302,10 +479,10 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error
 	return nil
 }
 
-// createTextImage 创建文字图像
-func createTextImage(config TransparentTextWatermarkConfig) (*image.NRGBA, error) {
+// CreateTextImage 创建文字图像
+func CreateTextImage(text, fontPath string, size float64, color color.RGBA, rotation float64) (*image.NRGBA, error) {
 	// 加载字体文件
-	fontData, err := os.ReadFile(config.FontPath)
+	fontData, err := os.ReadFile(fontPath)
 	if err != nil {
 		return nil, errors.New("failed to read font file:" + err.Error())
 	}
@@ -317,17 +494,17 @@ func createTextImage(config TransparentTextWatermarkConfig) (*image.NRGBA, error
 
 	// 设置字体大小和选项
 	face := truetype.NewFace(fontFace, &truetype.Options{
-		Size:    config.Size,
+		Size:    size,
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
 
 	// 计算文字的宽度和高度
-	textWidth, textHeight := measureText(face, config.Text)
+	textWidth, textHeight := measureText(face, text)
 
 	// 文字需要旋转时，确保最终图像足够大以容纳旋转后的文本
 	padding := 0
-	if config.Rotation != 0 {
+	if rotation != 0 {
 		// 当旋转时，需要更大的画布以确保文本在旋转后不会被裁剪
 		diagonal := int(math.Sqrt(float64(textWidth*textWidth + textHeight*textHeight)))
 		padding = (diagonal - textWidth) / 2
@@ -340,7 +517,7 @@ func createTextImage(config TransparentTextWatermarkConfig) (*image.NRGBA, error
 	// 绘制文字
 	d := &font.Drawer{
 		Dst:  img,
-		Src:  image.NewUniform(config.Color),
+		Src:  image.NewUniform(color),
 		Face: face,
 	}
 
@@ -348,12 +525,12 @@ func createTextImage(config TransparentTextWatermarkConfig) (*image.NRGBA, error
 	d.Dot = fixed.P(padding, textHeight+padding-5)
 
 	// 绘制文字
-	d.DrawString(config.Text)
+	d.DrawString(text)
 
 	// 如果需要旋转
 	var dst *image.NRGBA
-	if config.Rotation != 0 {
-		dst = imaging.Rotate(img, config.Rotation, color.Transparent)
+	if rotation != 0 {
+		dst = imaging.Rotate(img, rotation, color.Transparent)
 	} else {
 		dst = imaging.Clone(img)
 	}
