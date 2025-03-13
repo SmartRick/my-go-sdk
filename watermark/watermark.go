@@ -1,6 +1,7 @@
 package watermark
 
 import (
+	"bytes"
 	"errors"
 	"image"
 	"image/color"
@@ -137,8 +138,9 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 
 // TransparentTextWatermarkConfig 透明文字水印配置
 type TransparentTextWatermarkConfig struct {
-	OriginImagePath    string       // 原图地址
-	CompositeImagePath string       // 合成图地址
+	OriginImagePath    string       // 原图地址（与OriginImageBytes二选一）
+	OriginImageBytes   []byte       // 原图字节数组（与OriginImagePath二选一）
+	CompositeImagePath string       // 合成图地址（可选，为空时不保存到文件）
 	FontPath           string       // 字体文件地址（可选，为空时使用系统默认字体）
 	Text               string       // 文字内容
 	Size               float64      // 文字大小
@@ -197,17 +199,30 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) (imag
 		return nil, errors.New("watermark position tiled need tiled_cols and tiled_rows")
 	}
 
-	// 打开原始图片
-	originFile, err := os.Open(config.OriginImagePath)
-	if err != nil {
-		return nil, errors.New("open origin image file error:" + err.Error())
-	}
-	defer originFile.Close()
-
 	// 解码原始图片
-	originImg, err := imaging.Decode(originFile)
-	if err != nil {
-		return nil, errors.New("decode origin image error: " + err.Error())
+	var originImg image.Image
+	var err error
+
+	if len(config.OriginImageBytes) > 0 {
+		// 从字节数组读取图片
+		originImg, err = imaging.Decode(bytes.NewReader(config.OriginImageBytes))
+		if err != nil {
+			return nil, errors.New("decode origin image bytes error: " + err.Error())
+		}
+	} else if config.OriginImagePath != "" {
+		// 从文件读取图片
+		originFile, err := os.Open(config.OriginImagePath)
+		if err != nil {
+			return nil, errors.New("open origin image file error:" + err.Error())
+		}
+		defer originFile.Close()
+
+		originImg, err = imaging.Decode(originFile)
+		if err != nil {
+			return nil, errors.New("decode origin image file error: " + err.Error())
+		}
+	} else {
+		return nil, errors.New("either OriginImagePath or OriginImageBytes must be provided")
 	}
 
 	// 创建文字水印图像
@@ -362,4 +377,130 @@ func createTextImage(config TransparentTextWatermarkConfig) (*image.NRGBA, error
 	}
 
 	return dst, nil
+}
+
+// WatermarkOptions 水印选项
+type WatermarkOptions struct {
+	FontPath string     // 字体文件路径
+	Size     float64    // 字体大小
+	Color    color.RGBA // 字体颜色
+	Opacity  float64    // 透明度
+	Rotation float64    // 旋转角度
+	OffsetX  int        // X轴偏移
+	OffsetY  int        // Y轴偏移
+}
+
+// DefaultWatermarkOptions 默认水印选项
+var DefaultWatermarkOptions = WatermarkOptions{
+	Size:     48,
+	Color:    Black,
+	Opacity:  0.5,
+	Rotation: 0,
+	OffsetX:  20,
+	OffsetY:  20,
+}
+
+// AddTextWatermark 快速添加单个文字水印
+func AddTextWatermark(img []byte, text string, position WatermarkPos, opts *WatermarkOptions) (image.Image, error) {
+	// 如果没有提供选项，使用默认选项
+	if opts == nil {
+		opts = &DefaultWatermarkOptions
+	}
+
+	// 创建水印配置
+	config := TransparentTextWatermarkConfig{
+		OriginImageBytes: img,
+		FontPath:         opts.FontPath,
+		Text:             text,
+		Size:             opts.Size,
+		Color:            opts.Color,
+		WatermarkPos:     position,
+		Opacity:          opts.Opacity,
+		OffsetX:          opts.OffsetX,
+		OffsetY:          opts.OffsetY,
+		Rotation:         opts.Rotation,
+	}
+
+	return CreateTransparentTextWatermark(config)
+}
+
+// AddTiledTextWatermark 快速添加平铺文字水印
+func AddTiledTextWatermark(img []byte, text string, rows, cols int, opts *WatermarkOptions) (image.Image, error) {
+	// 如果没有提供选项，使用默认选项
+	if opts == nil {
+		opts = &DefaultWatermarkOptions
+	}
+
+	// 创建水印配置
+	config := TransparentTextWatermarkConfig{
+		OriginImageBytes: img,
+		FontPath:         opts.FontPath,
+		Text:             text,
+		Size:             opts.Size,
+		Color:            opts.Color,
+		WatermarkPos:     Tiled,
+		Opacity:          opts.Opacity,
+		OffsetX:          opts.OffsetX,
+		OffsetY:          opts.OffsetY,
+		Rotation:         opts.Rotation,
+		TiledRows:        rows,
+		TiledCols:        cols,
+	}
+
+	return CreateTransparentTextWatermark(config)
+}
+
+// AddTextWatermarkToFile 快速添加单个文字水印到文件
+func AddTextWatermarkToFile(imagePath string, text string, position WatermarkPos, opts *WatermarkOptions) (image.Image, error) {
+	// 如果没有提供选项，使用默认选项
+	if opts == nil {
+		opts = &DefaultWatermarkOptions
+	}
+
+	// 创建水印配置
+	config := TransparentTextWatermarkConfig{
+		OriginImagePath: imagePath,
+		FontPath:        opts.FontPath,
+		Text:            text,
+		Size:            opts.Size,
+		Color:           opts.Color,
+		WatermarkPos:    position,
+		Opacity:         opts.Opacity,
+		OffsetX:         opts.OffsetX,
+		OffsetY:         opts.OffsetY,
+		Rotation:        opts.Rotation,
+	}
+
+	return CreateTransparentTextWatermark(config)
+}
+
+// AddTiledTextWatermarkToFile 快速添加平铺文字水印到文件
+func AddTiledTextWatermarkToFile(imagePath string, text string, rows, cols int, opts *WatermarkOptions) (image.Image, error) {
+	// 如果没有提供选项，使用默认选项
+	if opts == nil {
+		opts = &DefaultWatermarkOptions
+	}
+
+	// 创建水印配置
+	config := TransparentTextWatermarkConfig{
+		OriginImagePath: imagePath,
+		FontPath:        opts.FontPath,
+		Text:            text,
+		Size:            opts.Size,
+		Color:           opts.Color,
+		WatermarkPos:    Tiled,
+		Opacity:         opts.Opacity,
+		OffsetX:         opts.OffsetX,
+		OffsetY:         opts.OffsetY,
+		Rotation:        opts.Rotation,
+		TiledRows:       rows,
+		TiledCols:       cols,
+	}
+
+	return CreateTransparentTextWatermark(config)
+}
+
+// SaveImage 保存图片到文件
+func SaveImage(img image.Image, outputPath string) error {
+	return imaging.Save(img, outputPath)
 }

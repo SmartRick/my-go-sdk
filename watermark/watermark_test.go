@@ -33,7 +33,7 @@ func TestCreateTransparentTextWatermark(t *testing.T) {
 		OffsetY:            20,
 		Rotation:           0, // 不旋转
 	}
-	err := CreateTransparentTextWatermark(config)
+	_, err := CreateTransparentTextWatermark(config)
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,7 +52,7 @@ func TestCreateTransparentTextWatermark(t *testing.T) {
 		TiledCols:          5,
 		Rotation:           -45, // -45度旋转
 	}
-	err = CreateTransparentTextWatermark(configTiled)
+	_, err = CreateTransparentTextWatermark(configTiled)
 	if err != nil {
 		t.Error(err)
 	}
@@ -71,7 +71,7 @@ func TestCreateTransparentTextWatermarkWithDefaultFont(t *testing.T) {
 		OffsetX:      20,
 		OffsetY:      20,
 	}
-	err := CreateTransparentTextWatermark(config)
+	_, err := CreateTransparentTextWatermark(config)
 	if err != nil {
 		t.Error(err)
 	}
