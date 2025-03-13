@@ -185,53 +185,35 @@ func measureText(face font.Face, text string) (int, int) {
 
 // CreateTransparentTextWatermark 创建透明文字水印
 // 先将文字渲染到透明图层，然后作为图片叠加到目标图片上
-func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error {
+func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) (image.Image, error) {
 	// 输入参数验证
 	if config.Opacity < 0 || config.Opacity > 1 {
-		return errors.New("watermark opacity error: Ensure 0.0 <= opacity <= 1.0")
+		return nil, errors.New("watermark opacity error: Ensure 0.0 <= opacity <= 1.0")
 	}
 	if config.Opacity == 0 {
 		config.Opacity = 1
 	}
 	if config.WatermarkPos == Tiled && (config.TiledCols == 0 || config.TiledRows == 0) {
-		return errors.New("watermark position tiled need tiled_cols and tiled_rows")
+		return nil, errors.New("watermark position tiled need tiled_cols and tiled_rows")
 	}
 
 	// 打开原始图片
 	originFile, err := os.Open(config.OriginImagePath)
 	if err != nil {
-		return errors.New("open origin image file error:" + err.Error())
+		return nil, errors.New("open origin image file error:" + err.Error())
 	}
 	defer originFile.Close()
-
-	// 处理输出路径
-	isExists, _ := common.PathExists(config.CompositeImagePath)
-	if isExists {
-		err = os.Remove(config.CompositeImagePath)
-		if err != nil {
-			return errors.New("old composite image remove error:" + err.Error())
-		}
-	}
-
-	dirPath := filepath.Dir(config.CompositeImagePath)
-	isExist, _ := common.PathExists(dirPath)
-	if !isExist {
-		err = os.MkdirAll(dirPath, 0755)
-		if err != nil {
-			return err
-		}
-	}
 
 	// 解码原始图片
 	originImg, err := imaging.Decode(originFile)
 	if err != nil {
-		return errors.New("decode origin image error: " + err.Error())
+		return nil, errors.New("decode origin image error: " + err.Error())
 	}
 
 	// 创建文字水印图像
 	textWatermarkImg, err := createTextImage(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 根据水印位置合成图片
@@ -293,14 +275,34 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error
 		}
 		destImg = result
 	default:
-		return errors.New("watermark position error")
+		return nil, errors.New("watermark position error")
 	}
 
-	// 保存结果图片
-	if err = imaging.Save(destImg, config.CompositeImagePath); err != nil {
-		return errors.New("create composite image error:" + err.Error())
+	// 如果指定了输出路径，则保存结果图片
+	if config.CompositeImagePath != "" {
+		// 处理输出路径
+		isExists, _ := common.PathExists(config.CompositeImagePath)
+		if isExists {
+			err = os.Remove(config.CompositeImagePath)
+			if err != nil {
+				return nil, errors.New("old composite image remove error:" + err.Error())
+			}
+		}
+
+		dirPath := filepath.Dir(config.CompositeImagePath)
+		isExist, _ := common.PathExists(dirPath)
+		if !isExist {
+			err = os.MkdirAll(dirPath, 0755)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if err = imaging.Save(destImg, config.CompositeImagePath); err != nil {
+			return nil, errors.New("create composite image error:" + err.Error())
+		}
 	}
-	return nil
+	return destImg, nil
 }
 
 // createTextImage 创建文字图像
