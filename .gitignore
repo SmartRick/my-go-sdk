@@ -1,2 +1,36 @@
+# IDE and editor files
 .idea/
-.git/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.history/
+
+# Test files
+testdata/
+*.test
+*.out
+
+# Build files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Debug files
+debug/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Composite images
+composite*.jpg
+composite*.png
+
+# Go specific
+vendor/
