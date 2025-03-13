@@ -1,4 +1,4 @@
-package gowatermark
+package watermark
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SmartRick/my-go-sdk/common"
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
@@ -63,18 +64,6 @@ func LoadFont(fontPath string) (*truetype.Font, error) {
 	}
 
 	return font, nil
-}
-
-// PathExists 检查文件路径是否存在
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }
 
 // MeasureText 计算给定文字的宽度和高度
@@ -156,7 +145,7 @@ func CreateTextImage(text string, fontSize float64, fontData []byte, textColor c
 // PrepareOutputPath 准备输出文件路径，删除已存在的文件并创建必要的目录
 func PrepareOutputPath(path string) error {
 	// 如果合成图片存在则删除重新生成
-	isExists, _ := PathExists(path)
+	isExists, _ := common.PathExists(path)
 	if isExists {
 		err := os.Remove(path)
 		if err != nil {
@@ -166,7 +155,7 @@ func PrepareOutputPath(path string) error {
 
 	// 判断文件夹是否存在，不存在创建
 	dirPath := filepath.Dir(path)
-	isExist, _ := PathExists(dirPath)
+	isExist, _ := common.PathExists(dirPath)
 	if !isExist {
 		err := os.MkdirAll(dirPath, 0755)
 		if err != nil {

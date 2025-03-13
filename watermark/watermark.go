@@ -1,4 +1,4 @@
-package gowatermark
+package watermark
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SmartRick/my-go-sdk/common"
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
@@ -50,7 +51,7 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 	}
 	defer originFile.Close()
 	// 如果合成图片存在则删除重新生成
-	isExists, _ := pathExists(config.CompositeImagePath)
+	isExists, _ := common.PathExists(config.CompositeImagePath)
 	if isExists {
 		err = os.Remove(config.CompositeImagePath)
 		if err != nil {
@@ -59,7 +60,7 @@ func CreateImageWatermark(config ImageWatermarkConfig) error {
 	}
 	// 判断文件夹是否存在，不存在创建
 	dirPath := filepath.Dir(config.CompositeImagePath)
-	isExist, _ := pathExists(dirPath)
+	isExist, _ := common.PathExists(dirPath)
 	if !isExist {
 		err = os.MkdirAll(dirPath, 0755)
 		if err != nil {
@@ -204,7 +205,7 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error
 	defer originFile.Close()
 
 	// 处理输出路径
-	isExists, _ := pathExists(config.CompositeImagePath)
+	isExists, _ := common.PathExists(config.CompositeImagePath)
 	if isExists {
 		err = os.Remove(config.CompositeImagePath)
 		if err != nil {
@@ -213,7 +214,7 @@ func CreateTransparentTextWatermark(config TransparentTextWatermarkConfig) error
 	}
 
 	dirPath := filepath.Dir(config.CompositeImagePath)
-	isExist, _ := pathExists(dirPath)
+	isExist, _ := common.PathExists(dirPath)
 	if !isExist {
 		err = os.MkdirAll(dirPath, 0755)
 		if err != nil {

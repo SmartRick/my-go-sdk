@@ -1,4 +1,4 @@
-package gowatermark
+package watermark
 
 import (
 	"testing"
